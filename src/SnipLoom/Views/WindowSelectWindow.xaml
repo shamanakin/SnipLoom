@@ -1,0 +1,146 @@
+<Window x:Class="SnipLoom.Views.WindowSelectWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Select Window"
+        Height="400"
+        Width="500"
+        WindowStartupLocation="CenterOwner"
+        Background="#1e1e1e"
+        ResizeMode="CanResizeWithGrip">
+    
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        
+        <!-- Header -->
+        <TextBlock Grid.Row="0" 
+                   Text="Select a window to record" 
+                   FontSize="16" 
+                   FontWeight="SemiBold" 
+                   Foreground="White" 
+                   Margin="0,0,0,12"/>
+        
+        <!-- Search and Refresh -->
+        <Grid Grid.Row="1" Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBox x:Name="SearchBox"
+                     Grid.Column="0"
+                     Background="#333"
+                     Foreground="White"
+                     BorderThickness="0"
+                     Padding="10,8"
+                     FontSize="13"
+                     TextChanged="SearchBox_TextChanged"
+                     VerticalContentAlignment="Center">
+                <TextBox.Style>
+                    <Style TargetType="TextBox">
+                        <Style.Resources>
+                            <VisualBrush x:Key="HintBrush" AlignmentX="Left" AlignmentY="Center" Stretch="None">
+                                <VisualBrush.Visual>
+                                    <TextBlock Text="Search windows..." Foreground="#666" Margin="10,0,0,0"/>
+                                </VisualBrush.Visual>
+                            </VisualBrush>
+                        </Style.Resources>
+                        <Style.Triggers>
+                            <Trigger Property="Text" Value="">
+                                <Setter Property="Background" Value="{StaticResource HintBrush}"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBox.Style>
+            </TextBox>
+            <Button Grid.Column="1"
+                    Content="Refresh"
+                    Click="Refresh_Click"
+                    Background="#444"
+                    Foreground="White"
+                    Padding="12,8"
+                    BorderThickness="0"
+                    Cursor="Hand"
+                    Margin="8,0,0,0"
+                    ToolTip="Refresh the window list"/>
+        </Grid>
+        
+        <!-- Window List -->
+        <ListBox x:Name="WindowList"
+                 Grid.Row="2"
+                 Background="#252525"
+                 BorderThickness="0"
+                 Foreground="White"
+                 SelectionChanged="WindowList_SelectionChanged">
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem">
+                    <Setter Property="Padding" Value="12,10"/>
+                    <Setter Property="Cursor" Value="Hand"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ListBoxItem">
+                                <Border x:Name="Bd" 
+                                        Background="#252525" 
+                                        Padding="{TemplateBinding Padding}"
+                                        Margin="2">
+                                    <ContentPresenter/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter TargetName="Bd" Property="Background" Value="#0078d4"/>
+                                    </Trigger>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="Bd" Property="Background" Value="#3d3d3d"/>
+                                    </Trigger>
+                                    <MultiTrigger>
+                                        <MultiTrigger.Conditions>
+                                            <Condition Property="IsSelected" Value="True"/>
+                                            <Condition Property="IsMouseOver" Value="True"/>
+                                        </MultiTrigger.Conditions>
+                                        <Setter TargetName="Bd" Property="Background" Value="#0078d4"/>
+                                    </MultiTrigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </ListBox.ItemContainerStyle>
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel>
+                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" Foreground="White" TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{Binding ProcessName}" FontSize="11" Foreground="#888"/>
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+        
+        <!-- Buttons -->
+        <StackPanel Grid.Row="3" 
+                    Orientation="Horizontal" 
+                    HorizontalAlignment="Right" 
+                    Margin="0,12,0,0">
+            <Button x:Name="BtnCancel" 
+                    Content="Cancel" 
+                    Click="Cancel_Click"
+                    Background="#444"
+                    Foreground="White"
+                    Padding="16,8"
+                    BorderThickness="0"
+                    Cursor="Hand"
+                    Margin="0,0,8,0"/>
+            <Button x:Name="BtnSelect" 
+                    Content="Select" 
+                    Click="Select_Click"
+                    IsEnabled="False"
+                    Background="#0078d4"
+                    Foreground="White"
+                    Padding="16,8"
+                    BorderThickness="0"
+                    Cursor="Hand"/>
+        </StackPanel>
+    </Grid>
+</Window>

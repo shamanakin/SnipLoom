@@ -1,0 +1,31 @@
+<Window x:Class="SnipLoom.Views.RecordingFrameWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Recording"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize"
+        IsHitTestVisible="False">
+    
+    <!-- 
+    Recording frame rendered as 4 separate bars OUTSIDE the capture region.
+    This ensures the frame never appears in the recorded video.
+    The window is also excluded from capture via SetWindowDisplayAffinity.
+    -->
+    <Canvas>
+        <!-- Top bar -->
+        <Rectangle x:Name="TopBar" Fill="#FF4444" Canvas.Left="0" Canvas.Top="0"/>
+        
+        <!-- Bottom bar -->
+        <Rectangle x:Name="BottomBar" Fill="#FF4444" Canvas.Left="0"/>
+        
+        <!-- Left bar -->
+        <Rectangle x:Name="LeftBar" Fill="#FF4444" Canvas.Left="0"/>
+        
+        <!-- Right bar -->
+        <Rectangle x:Name="RightBar" Fill="#FF4444"/>
+    </Canvas>
+</Window>

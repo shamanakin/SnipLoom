@@ -181,11 +181,19 @@ public partial class MainWindow : Window
         {
             var r = regionWindow.Result;
             _recordingDescription = $"region ({r.RegionWidth}x{r.RegionHeight})";
-            _encoderService!.InitializeForRegion(_tempFilePath!, r.RegionX, r.RegionY, r.RegionWidth, r.RegionHeight);
+            
+            // Pass target display device for multi-monitor support
+            _encoderService!.InitializeForRegion(
+                _tempFilePath!, 
+                r.RegionX, 
+                r.RegionY, 
+                r.RegionWidth, 
+                r.RegionHeight,
+                r.TargetDisplayDevice);
             
             if (_encoderService.IsInitialized)
             {
-                // Show recording frame overlay using DIP coordinates
+                // Show recording frame overlay using DIP coordinates (virtual screen coords)
                 _recordingFrame = new RecordingFrameWindow();
                 _recordingFrame.SetRegionDips(r.RegionDipX, r.RegionDipY, r.RegionDipWidth, r.RegionDipHeight);
                 _recordingFrame.Show();

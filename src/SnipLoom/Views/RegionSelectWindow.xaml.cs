@@ -1,15 +1,59 @@
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using ScreenRecorderLib;
 using SnipLoom.Services;
 
 namespace SnipLoom.Views;
 
+/// <summary>
+/// Represents display information for multi-monitor support
+/// </summary>
+public class DisplayInfo
+{
+    public string DeviceName { get; set; } = "";
+    public Rect Bounds { get; set; } // Physical pixel bounds in virtual screen space
+    public Rect DipBounds { get; set; } // DIP bounds in virtual screen space
+    public double DpiScale { get; set; } = 1.0;
+}
+
 public partial class RegionSelectWindow : Window
 {
+    // P/Invoke for monitor enumeration
+    [DllImport("user32.dll")]
+    private static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr lprcClip, MonitorEnumProc lpfnEnum, IntPtr dwData);
+    
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFOEX lpmi);
+    
+    private delegate bool MonitorEnumProc(IntPtr hMonitor, IntPtr hdcMonitor, ref RECT lprcMonitor, IntPtr dwData);
+    
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RECT
+    {
+        public int Left, Top, Right, Bottom;
+    }
+    
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct MONITORINFOEX
+    {
+        public int cbSize;
+        public RECT rcMonitor;
+        public RECT rcWork;
+        public uint dwFlags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+        public string szDevice;
+    }
+    
+    private const uint MONITORINFOF_PRIMARY = 1;
+
     private enum DragMode { None, Creating, Moving, ResizingNW, ResizingN, ResizingNE, ResizingW, ResizingE, ResizingSW, ResizingS, ResizingSE }
     
     private DragMode _dragMode = DragMode.None;
@@ -18,6 +62,11 @@ public partial class RegionSelectWindow : Window
     private Rect _originalSelection;
     private double _aspectRatio = 16.0 / 9.0; // Default to 16:9
     private bool _hasSelection = false;
+    
+    // Multi-monitor support
+    private List<DisplayInfo> _displays = new();
+    private double _virtualScreenLeft;
+    private double _virtualScreenTop;
 
     public CaptureSelection? Result { get; private set; }
 
@@ -35,18 +84,162 @@ public partial class RegionSelectWindow : Window
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        // Cover the primary screen
-        var screen = System.Windows.SystemParameters.WorkArea;
-        Left = 0;
-        Top = 0;
-        Width = System.Windows.SystemParameters.PrimaryScreenWidth;
-        Height = System.Windows.SystemParameters.PrimaryScreenHeight;
+        // Load display information for multi-monitor support
+        LoadDisplayInfo();
+        
+        // Cover ALL monitors using virtual screen coordinates
+        _virtualScreenLeft = SystemParameters.VirtualScreenLeft;
+        _virtualScreenTop = SystemParameters.VirtualScreenTop;
+        
+        Left = _virtualScreenLeft;
+        Top = _virtualScreenTop;
+        Width = SystemParameters.VirtualScreenWidth;
+        Height = SystemParameters.VirtualScreenHeight;
+        
+        Debug.WriteLine($"RegionSelectWindow spanning virtual screen: ({Left},{Top}) {Width}x{Height}");
+        Debug.WriteLine($"Found {_displays.Count} display(s)");
         
         UpdateDimOverlay();
         
         // Focus the window to receive keyboard events
         Focus();
         Activate();
+    }
+    
+    // Temporary storage for monitor enumeration
+    private static List<(string device, Rect bounds, bool isPrimary)>? _tempMonitorInfos;
+    
+    private static bool MonitorEnumCallback(IntPtr hMonitor, IntPtr hdcMonitor, ref RECT lprcMonitor, IntPtr dwData)
+    {
+        var mi = new MONITORINFOEX();
+        mi.cbSize = Marshal.SizeOf<MONITORINFOEX>();
+        
+        if (GetMonitorInfo(hMonitor, ref mi))
+        {
+            var bounds = new Rect(
+                mi.rcMonitor.Left,
+                mi.rcMonitor.Top,
+                mi.rcMonitor.Right - mi.rcMonitor.Left,
+                mi.rcMonitor.Bottom - mi.rcMonitor.Top);
+            
+            bool isPrimary = (mi.dwFlags & MONITORINFOF_PRIMARY) != 0;
+            _tempMonitorInfos?.Add((mi.szDevice, bounds, isPrimary));
+        }
+        return true; // Continue enumeration
+    }
+    
+    /// <summary>
+    /// Load display information using Win32 API for accurate bounds
+    /// </summary>
+    private void LoadDisplayInfo()
+    {
+        _displays.Clear();
+        
+        try
+        {
+            double dpiScale = GetDpiScale();
+            _tempMonitorInfos = new List<(string device, Rect bounds, bool isPrimary)>();
+            
+            // Enumerate all monitors using Win32 API
+            EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, MonitorEnumCallback, IntPtr.Zero);
+            
+            // Sort so primary is first
+            var sortedMonitors = _tempMonitorInfos.OrderByDescending(m => m.isPrimary).ToList();
+            _tempMonitorInfos = null;
+            
+            foreach (var (device, bounds, isPrimary) in sortedMonitors)
+            {
+                var info = new DisplayInfo
+                {
+                    DeviceName = device,
+                    Bounds = bounds,
+                    DpiScale = dpiScale,
+                    // Calculate DIP bounds (WPF coordinates)
+                    DipBounds = new Rect(
+                        bounds.X / dpiScale,
+                        bounds.Y / dpiScale,
+                        bounds.Width / dpiScale,
+                        bounds.Height / dpiScale)
+                };
+                
+                _displays.Add(info);
+                Debug.WriteLine($"Display '{info.DeviceName}': Bounds={info.Bounds}, DipBounds={info.DipBounds}, Primary={isPrimary}");
+            }
+            
+            if (_displays.Count == 0)
+            {
+                throw new InvalidOperationException("No monitors found");
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Failed to load display info: {ex}");
+            _tempMonitorInfos = null;
+            
+            // Fallback: create a single display entry for primary screen
+            double dpiScale = GetDpiScale();
+            _displays.Add(new DisplayInfo
+            {
+                DeviceName = "", // Empty means main/primary monitor
+                Bounds = new Rect(0, 0, 
+                    SystemParameters.PrimaryScreenWidth * dpiScale, 
+                    SystemParameters.PrimaryScreenHeight * dpiScale),
+                DipBounds = new Rect(0, 0, 
+                    SystemParameters.PrimaryScreenWidth, 
+                    SystemParameters.PrimaryScreenHeight),
+                DpiScale = dpiScale
+            });
+        }
+    }
+    
+    /// <summary>
+    /// Find which display contains the center of the selection
+    /// </summary>
+    private DisplayInfo? GetDisplayForSelection()
+    {
+        if (_displays.Count == 0) return null;
+        if (_displays.Count == 1) return _displays[0];
+        
+        // Convert selection from window-relative to virtual screen DIPs
+        var selectionInVirtualScreen = new Rect(
+            _selection.X + _virtualScreenLeft,
+            _selection.Y + _virtualScreenTop,
+            _selection.Width,
+            _selection.Height);
+        
+        // Get the center of the selection in virtual screen DIP coordinates
+        var center = new Point(
+            selectionInVirtualScreen.X + selectionInVirtualScreen.Width / 2,
+            selectionInVirtualScreen.Y + selectionInVirtualScreen.Height / 2);
+        
+        // Find the display that contains this point
+        foreach (var display in _displays)
+        {
+            if (display.DipBounds.Contains(center))
+            {
+                return display;
+            }
+        }
+        
+        // Fallback: find display with most overlap
+        DisplayInfo? bestMatch = null;
+        double bestOverlap = 0;
+        
+        foreach (var display in _displays)
+        {
+            var overlap = Rect.Intersect(selectionInVirtualScreen, display.DipBounds);
+            if (!overlap.IsEmpty)
+            {
+                double area = overlap.Width * overlap.Height;
+                if (area > bestOverlap)
+                {
+                    bestOverlap = area;
+                    bestMatch = display;
+                }
+            }
+        }
+        
+        return bestMatch ?? _displays[0];
     }
 
     private void OnKeyDown(object sender, KeyEventArgs e)
@@ -245,6 +438,7 @@ public partial class RegionSelectWindow : Window
 
     private void ClampSelectionToScreen()
     {
+        // Clamp to the virtual screen bounds (all monitors)
         double x = Math.Max(0, Math.Min(_selection.X, ActualWidth - _selection.Width));
         double y = Math.Max(0, Math.Min(_selection.Y, ActualHeight - _selection.Height));
         _selection = new Rect(x, y, _selection.Width, _selection.Height);
@@ -450,31 +644,59 @@ public partial class RegionSelectWindow : Window
             return;
         }
         
-        // Get DPI scale to convert DIPs to physical pixels
-        double dpiScale = GetDpiScale();
+        // Find which display the selection is on
+        var targetDisplay = GetDisplayForSelection();
+        double dpiScale = targetDisplay?.DpiScale ?? GetDpiScale();
+        string? displayDevice = targetDisplay?.DeviceName;
         
-        // Physical pixel coordinates for ScreenRecorderLib
-        int pixelX = (int)(_selection.X * dpiScale);
-        int pixelY = (int)(_selection.Y * dpiScale);
+        // _selection is in window-relative DIPs (window starts at 0,0)
+        // First convert to virtual screen DIPs by adding window position
+        double virtualDipX = _selection.X + _virtualScreenLeft;
+        double virtualDipY = _selection.Y + _virtualScreenTop;
+        
+        // Then convert to physical pixels
+        int virtualPixelX = (int)(virtualDipX * dpiScale);
+        int virtualPixelY = (int)(virtualDipY * dpiScale);
         int pixelWidth = (int)(_selection.Width * dpiScale);
         int pixelHeight = (int)(_selection.Height * dpiScale);
+        
+        // Calculate coordinates RELATIVE to the target display
+        // ScreenRecorderLib expects coordinates relative to the display origin
+        int relativeX = virtualPixelX;
+        int relativeY = virtualPixelY;
+        
+        if (targetDisplay != null)
+        {
+            relativeX = virtualPixelX - (int)targetDisplay.Bounds.X;
+            relativeY = virtualPixelY - (int)targetDisplay.Bounds.Y;
+            
+            Debug.WriteLine($"Selection on display '{displayDevice}':");
+            Debug.WriteLine($"  Window-relative DIPs: ({_selection.X},{_selection.Y})");
+            Debug.WriteLine($"  Virtual screen DIPs: ({virtualDipX},{virtualDipY})");
+            Debug.WriteLine($"  Virtual screen pixels: ({virtualPixelX},{virtualPixelY})");
+            Debug.WriteLine($"  Display origin (pixels): ({targetDisplay.Bounds.X},{targetDisplay.Bounds.Y})");
+            Debug.WriteLine($"  Relative coords: ({relativeX},{relativeY})");
+        }
         
         Result = new CaptureSelection
         {
             Type = CaptureSelection.CaptureType.Region,
             DisplayName = $"Region ({pixelWidth}x{pixelHeight})",
-            // Physical pixels for ScreenRecorderLib
-            RegionX = pixelX,
-            RegionY = pixelY,
+            // Physical pixels RELATIVE to target display for ScreenRecorderLib
+            RegionX = relativeX,
+            RegionY = relativeY,
             RegionWidth = pixelWidth,
             RegionHeight = pixelHeight,
             Width = pixelWidth,
             Height = pixelHeight,
-            // DIPs for recording frame overlay
-            RegionDipX = _selection.X,
-            RegionDipY = _selection.Y,
+            // DIPs in virtual screen coords for recording frame overlay positioning
+            // These need to be virtual screen coords (add window offset)
+            RegionDipX = virtualDipX,
+            RegionDipY = virtualDipY,
             RegionDipWidth = _selection.Width,
-            RegionDipHeight = _selection.Height
+            RegionDipHeight = _selection.Height,
+            // Target display for multi-monitor support
+            TargetDisplayDevice = displayDevice
         };
         
         Close();

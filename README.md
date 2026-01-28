@@ -16,7 +16,7 @@
 
 ## Download
 
-**[Download Latest Release](https://github.com/YOUR_USERNAME/SnipLoom/releases/latest)** - Portable `.zip` with single `SnipLoom.exe`
+**[Download Latest Release](https://github.com/shamanakin/SnipLoom/releases/latest)** - Portable `.zip` with single `SnipLoom.exe`
 
 Just extract and run. No installation required.
 
@@ -35,7 +35,7 @@ Just extract and run. No installation required.
 - **System audio capture** via WASAPI loopback
 - **MP4 output** with H.264 video + AAC audio
 - **No watermarks, no time limits**
-- **Single portable EXE** (~30MB, self-contained)
+- **Single portable EXE** (self-contained)
 - **Save prompt** after every recording — choose where to save
 
 ---
@@ -63,7 +63,6 @@ The portable release includes all dependencies. No .NET installation needed.
 ## Known Limitations
 
 - **Window capture**: Some apps using hardware-accelerated rendering (games, some media players, Battle.net) may not capture correctly. Use Display or Region mode instead.
-- **Multi-monitor**: Region capture is limited to the primary monitor.
 - **Audio**: Captures system audio only (not microphone).
 
 ---
@@ -96,6 +95,23 @@ dotnet run --project src/SnipLoom/SnipLoom.csproj
 ```
 
 Creates `dist/SnipLoom-win-x64.zip` containing a single self-contained `SnipLoom.exe`.
+
+### Distribution notes (SmartScreen / “looks like malware”)
+
+- **Unsigned EXEs**: Windows may show SmartScreen (“Windows protected your PC”) for unsigned downloads with no reputation. This is normal for new tools.
+- **Recommended**: **code sign** the published EXE (Authenticode) *before* zipping so users see your publisher name and reputation can build over time.
+
+The publish script supports optional signing if you have a PFX:
+
+```powershell
+.\scripts\publish.ps1 -PfxPath "C:\path\to\codesign.pfx" -PfxPassword "YOUR_PASSWORD"
+```
+
+You can also pass a specific signtool path and timestamp URL:
+
+```powershell
+.\scripts\publish.ps1 -SignToolPath "C:\Program Files (x86)\Windows Kits\10\bin\x64\signtool.exe" -TimestampUrl "http://timestamp.digicert.com" -PfxPath "C:\path\to\codesign.pfx" -PfxPassword "YOUR_PASSWORD"
+```
 
 ---
 

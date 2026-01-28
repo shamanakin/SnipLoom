@@ -20,9 +20,26 @@ public sealed class EncoderService : IDisposable
 
     public bool IsInitialized => _isInitialized;
     public bool IsRecording => _isRecording;
+    
+    // Audio settings
+    public bool CaptureSystemAudio { get; set; } = true;
+    public bool CaptureMicrophone { get; set; } = false;
 
     public event EventHandler<string>? RecordingCompleted;
     public event EventHandler<string>? RecordingFailed;
+
+    /// <summary>
+    /// Creates audio options for the recorder based on current settings
+    /// </summary>
+    private AudioOptions CreateAudioOptions()
+    {
+        return new AudioOptions
+        {
+            IsAudioEnabled = CaptureSystemAudio || CaptureMicrophone,
+            IsOutputDeviceEnabled = CaptureSystemAudio,
+            IsInputDeviceEnabled = CaptureMicrophone
+        };
+    }
 
     /// <summary>
     /// Initialize for full display capture (primary display, default settings)
@@ -30,7 +47,13 @@ public sealed class EncoderService : IDisposable
     public void InitializeForDisplay(string outputPath)
     {
         _outputPath = outputPath;
-        _recorder = Recorder.CreateRecorder();
+        
+        var options = new RecorderOptions
+        {
+            AudioOptions = CreateAudioOptions()
+        };
+        
+        _recorder = Recorder.CreateRecorder(options);
         WireEvents();
         _isInitialized = true;
         Debug.WriteLine($"EncoderService initialized for default display: {_outputPath}");
@@ -55,7 +78,8 @@ public sealed class EncoderService : IDisposable
                 SourceOptions = new SourceOptions
                 {
                     RecordingSources = sources
-                }
+                },
+                AudioOptions = CreateAudioOptions()
             };
             
             _recorder = Recorder.CreateRecorder(options);
@@ -66,8 +90,9 @@ public sealed class EncoderService : IDisposable
         catch (Exception ex)
         {
             Debug.WriteLine($"Failed to init for display '{deviceName}', falling back to default: {ex}");
-            // Fallback to default display
-            _recorder = Recorder.CreateRecorder();
+            // Fallback to default display with audio
+            var options = new RecorderOptions { AudioOptions = CreateAudioOptions() };
+            _recorder = Recorder.CreateRecorder(options);
             WireEvents();
             _isInitialized = true;
         }
@@ -92,7 +117,8 @@ public sealed class EncoderService : IDisposable
                 SourceOptions = new SourceOptions
                 {
                     RecordingSources = sources
-                }
+                },
+                AudioOptions = CreateAudioOptions()
             };
             
             _recorder = Recorder.CreateRecorder(options);
@@ -109,19 +135,37 @@ public sealed class EncoderService : IDisposable
     }
 
     /// <summary>
-    /// Initialize for region capture (crops the primary display to the specified rect)
+    /// Initialize for region capture (crops a display to the specified rect)
     /// </summary>
-    public void InitializeForRegion(string outputPath, int x, int y, int width, int height)
+    /// <param name="outputPath">Output file path</param>
+    /// <param name="x">X coordinate relative to the target display (in physical pixels)</param>
+    /// <param name="y">Y coordinate relative to the target display (in physical pixels)</param>
+    /// <param name="width">Width in physical pixels</param>
+    /// <param name="height">Height in physical pixels</param>
+    /// <param name="displayDeviceName">Target display device name (e.g., \\.\DISPLAY1), or null for main monitor</param>
+    public void InitializeForRegion(string outputPath, int x, int y, int width, int height, string? displayDeviceName = null)
     {
         _outputPath = outputPath;
         
         try
         {
             // Create a display source with the region to capture
-            var displaySource = new DisplayRecordingSource(DisplayRecordingSource.MainMonitor)
+            DisplayRecordingSource displaySource;
+            
+            if (!string.IsNullOrEmpty(displayDeviceName))
             {
-                SourceRect = new ScreenRect(x, y, width, height)
-            };
+                displaySource = new DisplayRecordingSource(displayDeviceName)
+                {
+                    SourceRect = new ScreenRect(x, y, width, height)
+                };
+            }
+            else
+            {
+                displaySource = new DisplayRecordingSource(DisplayRecordingSource.MainMonitor)
+                {
+                    SourceRect = new ScreenRect(x, y, width, height)
+                };
+            }
             
             var sources = new List<RecordingSourceBase> { displaySource };
             
@@ -130,13 +174,14 @@ public sealed class EncoderService : IDisposable
                 SourceOptions = new SourceOptions
                 {
                     RecordingSources = sources
-                }
+                },
+                AudioOptions = CreateAudioOptions()
             };
             
             _recorder = Recorder.CreateRecorder(options);
             WireEvents();
             _isInitialized = true;
-            Debug.WriteLine($"EncoderService initialized for region ({x},{y},{width},{height}): {_outputPath}");
+            Debug.WriteLine($"EncoderService initialized for region ({x},{y},{width},{height}) on {displayDeviceName ?? "MainMonitor"}: {_outputPath}");
         }
         catch (Exception ex)
         {

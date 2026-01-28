@@ -3,7 +3,12 @@
 
 param(
     [string]$Configuration = "Release",
-    [string]$Runtime = "win-x64"
+    [string]$Runtime = "win-x64",
+    # Optional: Authenticode signing (recommended for distribution)
+    [string]$SignToolPath = "",
+    [string]$PfxPath = "",
+    [string]$PfxPassword = "",
+    [string]$TimestampUrl = "http://timestamp.digicert.com"
 )
 
 $ErrorActionPreference = "Stop"
@@ -32,10 +37,12 @@ Write-Host "Publishing $Configuration build for $Runtime..." -ForegroundColor Ye
 dotnet publish $ProjectFile `
     -c $Configuration `
     -r $Runtime `
+    -p:Platform=x64 `
     --self-contained true `
     -p:PublishSingleFile=true `
     -p:IncludeNativeLibrariesForSelfExtract=true `
-    -p:EnableCompressionInSingleFile=true `
+    -p:IncludeAllContentForSelfExtract=true `
+    -p:EnableCompressionInSingleFile=false `
     -o $PublishDir
 
 if ($LASTEXITCODE -ne 0) {
@@ -54,6 +61,37 @@ if (-not $ExePath) {
 Write-Host ""
 Write-Host "Published executable: $($ExePath.FullName)" -ForegroundColor Green
 Write-Host "Size: $([math]::Round($ExePath.Length / 1MB, 2)) MB" -ForegroundColor Gray
+
+# Optional signing step (only if PfxPath is provided)
+if (-not [string]::IsNullOrWhiteSpace($PfxPath)) {
+    if ([string]::IsNullOrWhiteSpace($SignToolPath)) {
+        # Common VS Build Tools path fallback; user can pass -SignToolPath explicitly
+        $SignToolPath = "${env:ProgramFiles(x86)}\\Windows Kits\\10\\bin\\x64\\signtool.exe"
+    }
+
+    if (-not (Test-Path $SignToolPath)) {
+        throw "signtool.exe not found. Pass -SignToolPath or install Windows SDK. Tried: $SignToolPath"
+    }
+    if (-not (Test-Path $PfxPath)) {
+        throw "PFX not found: $PfxPath"
+    }
+
+    Write-Host ""
+    Write-Host "Signing executable (Authenticode)..." -ForegroundColor Yellow
+    & $SignToolPath sign `
+        /fd sha256 `
+        /td sha256 `
+        /tr $TimestampUrl `
+        /f $PfxPath `
+        /p $PfxPassword `
+        $ExePath.FullName
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Signing failed."
+    }
+
+    Write-Host "Signed: $($ExePath.FullName)" -ForegroundColor Green
+}
 
 # Create zip
 Write-Host ""

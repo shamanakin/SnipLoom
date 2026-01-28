@@ -22,16 +22,21 @@ public class CaptureSelection
     public int Height { get; init; }
     
     // For region capture - physical pixels (for ScreenRecorderLib)
+    // These are relative to the target display, not virtual screen coordinates
     public int RegionX { get; init; }
     public int RegionY { get; init; }
     public int RegionWidth { get; init; }
     public int RegionHeight { get; init; }
     
     // For region capture - WPF DIPs (for recording frame overlay)
+    // These are virtual screen coordinates for positioning the overlay
     public double RegionDipX { get; init; }
     public double RegionDipY { get; init; }
     public double RegionDipWidth { get; init; }
     public double RegionDipHeight { get; init; }
+    
+    // Target display device name for region capture (e.g., \\.\DISPLAY1)
+    public string? TargetDisplayDevice { get; init; }
 }
 
 /// <summary>

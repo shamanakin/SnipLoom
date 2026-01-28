@@ -2,6 +2,17 @@
 
 All notable changes to SnipLoom will be documented in this file.
 
+## [1.1.0] - 2026-01-28
+
+### Added
+- Multi-monitor region selection and capture (draw regions on any display)
+- Deterministic icon asset pipeline and embedded application icon
+- Hardened single-file publish script for distribution (full self-extract, optional Authenticode signing)
+
+### Fixed
+- Region capture coordinate offset on multi-monitor setups
+- System audio capture reliability in recordings
+
 ## [1.0.0] - 2026-01-22
 
 ### Added

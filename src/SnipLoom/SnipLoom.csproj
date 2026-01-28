@@ -17,8 +17,8 @@
     <Description>Lightweight Windows screen video recorder with Snipping Tool-style capture</Description>
     <Company>SnipLoom</Company>
     <Copyright>Copyright (c) 2026 SnipLoom Contributors</Copyright>
-    <Version>1.0.0</Version>
-    <FileVersion>1.0.0.0</FileVersion>
+    <Version>1.1.0</Version>
+    <FileVersion>1.1.0.0</FileVersion>
     
     <!-- Application icon -->
     <ApplicationIcon>Assets\Icon\SnipLoom.ico</ApplicationIcon>
